@@ -1,0 +1,159 @@
+MLIS Fees Solution Design
+ 
+## 1. Objective
+Deliver MLIS Fee support across Quote, Submission (Opportunity), and Policy flows with the following UX model:
+- Fee control is managed on Opportunity (Submission)
+- Underwriter uses a button action similar to Edit Premium / Limit of Indemnity
+- Button opens a modal containing fee fields and a range slider
+- Changes drive Fee__c creation/update rules for NB, MTA, and Cancellation
+ 
+## 2. Proposed UX Design
+### 2.1 Entry Point
+- Add an Opportunity quick action/button: Manage MLIS Fee
+- Visibility: Underwriter profiles/permission set only
+- Hidden/disabled for portal users
+ 
+### 2.2 Modal Design
+Fields in modal:
+- Enable MLIS Fee toggle (on/off)
+- Transaction context selector:
+  - New Business
+  - MTA
+  - Cancellation
+- Fee amount input (currency)
+- Fee range slider (min/max constrained by governance)
+- Override reason (mandatory when fee differs from default)
+- Read-only system default fee (effective-dated)
+ 
+Modal behavior:
+- On open, read effective-dated default for selected transaction context
+- Pre-populate slider and amount with current active value
+- Slider and amount stay synchronized
+- Save validates min/max range and lock rules
+ 
+### 2.3 Locking Rules
+- If Opportunity is Live: modal opens read-only or save blocked with message
+- If policy is Forced: modal opens read-only or save blocked with message
+- Existing values remain unchanged when lock conditions apply
+ 
+## 3. Data and Logic Design
+### 3.1 Fee Source of Truth
+- Effective-dated fee configuration remains source of default value
+- Opportunity override (if present and valid) takes precedence
+ 
+### 3.2 Fee__c Creation/Update Rule
+- Create one Fee__c per qualifying transaction event:
+  - NB
+  - MTA
+  - Cancellation
+- Avoid duplicates per transaction instance
+- Store:
+  - Type = MLIS Fee
+  - Amount, currency
+  - Transaction context
+  - Non-returnable flag
+ 
+### 3.3 Non-Returnable and Correction Rule
+- MLIS fee is non-returnable in all cancellation outputs
+- For internal cancel-and-reissue correction path:
+  - no MLIS fee charge
+  - no MLIS fee return line
+ 
+## 4. Integration Points
+- Quote Results: show MLIS Fee line + updated totals
+- Quote Summary: show MLIS Fee line + updated totals
+- Documents (where premium/total appears):
+  - Quote Document
+  - Specimen Policy Document
+  - Final Draft
+  - Policy Document
+  - Debit Note
+- Optional BDX mapping controlled by feature toggle
+ 
+## 5. Security and Audit
+- Underwriter-only edit access on Opportunity
+- Portal users read-only/no edit for fee controls
+- Track audit details for each override change:
+  - user
+  - timestamp
+  - old value
+  - new value
+  - reason
+ 
+## 6. Acceptance Highlights
+- Underwriter can manage fee from Opportunity button modal
+- Slider and amount remain synchronized and validated
+- Locks enforced for Live Opportunity and Forced Policy
+- MLIS fee appears correctly in quote views and in-scope docs
+- Cancellation refunds exclude MLIS fee
+- Cancel-and-reissue internal correction does not apply MLIS fee
+ 
+## 7. Delivery Components
+- Opportunity UI:
+  - quick action/button
+  - modal component with slider and validation
+- Service layer:
+  - retrieve default fee by transaction/effective date
+  - apply override precedence
+  - create/update Fee__c with duplicate prevention
+- Downstream rendering:
+  - quote/result/summary updates
+  - document merge updates
+  - optional BDX mapping
+- Testing:
+  - unit + integration + UAT scenarios
+ 
+## 8. End-to-End Flowchart
+```mermaid
+flowchart TD
+    A[Underwriter opens Opportunity] --> B[Click Manage MLIS Fee button]
+    B --> C[Open modal with fields and range slider]
+ 
+    C --> D[Load effective-dated default fee by transaction type]
+    D --> E{Opportunity Live or Policy Forced?}
+ 
+    E -->|Yes| F[Show lock message and block save]
+    E -->|No| G[Underwriter edits toggle/amount/slider/reason]
+ 
+    G --> H{Validation passed?}
+    H -->|No| I[Show validation errors]
+    I --> G
+ 
+    H -->|Yes| J[Resolve final fee value default vs override]
+    J --> K[Persist Opportunity fee control values]
+ 
+    K --> L{Transaction event occurs? NB/MTA/Cancellation}
+    L -->|No| M[Wait for next qualifying event]
+    L -->|Yes| N[Create or update Fee__c for transaction]
+ 
+    N --> O[Mark MLIS Fee non-returnable]
+    O --> P{Internal Cancel and Reissue correction?}
+    P -->|Yes| Q[Do not create fee charge or return]
+    P -->|No| R[Continue standard MLIS fee processing]
+ 
+    R --> S[Render fee in Quote Results and Quote Summary]
+    S --> T[Render fee in in-scope MLIS documents]
+    T --> U{BDX fee mapping enabled?}
+    U -->|No| V[Skip BDX fee mapping]
+    U -->|Yes| W[Map fee amount/currency/context to BDX]
+ 
+    Q --> X[End]
+    V --> X
+    W --> X
+    M --> X
+ 
+    classDef ui fill:#e9f2ff,stroke:#0b5cab,stroke-width:2px,color:#0a2d5e;
+    classDef rules fill:#fff8d6,stroke:#7a5d00,stroke-width:1.5px,color:#3d2f00;
+    classDef process fill:#e8f7e8,stroke:#1b5e20,stroke-width:1.5px,color:#0d3b12;
+    classDef guard fill:#ffeaea,stroke:#b42318,stroke-width:1.5px,color:#5c1010;
+ 
+    class A,B,C,D,G,H,I ui;
+    class E,L,P,U rules;
+    class J,K,N,O,R,S,T,W,M,X process;
+    class F,Q,V guard;
+```
+ 
+## 9. Notes for Build Planning
+- Keep button/modal behavior aligned with existing Opportunity premium-edit UX patterns
+- Reuse existing lock-state checks where possible
+- Add explicit guard in cancellation/cancel-and-reissue cloning paths to enforce MLIS non-returnable and correction rules
