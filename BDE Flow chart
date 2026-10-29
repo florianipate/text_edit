@@ -1,0 +1,32 @@
+flowchart LR
+  subgraph Accounts["Accounts"]
+    Group["Group Account<br/>Account<br/>Record Type: Group"]
+    Intermediary["Intermediary Account<br/>Account<br/>ParentId → Group Account"]
+    AccountingOffice["Accounting Office Account<br/>Account<br/>Record Type: Accounting Office<br/>Broker_Group_Account__c → Group/Broker Account"]
+    BDE["BDE Account<br/>Account<br/>Record Type: BDE"]
+  end
+
+  Contact["Contact<br/>AccountId → Intermediary Account<br/>Trading_Location__c → Trading Location"]
+
+  TradingLocation["Trading Location<br/>Trading_Location__c<br/>Broker_Group__c → Group Account (Master-Detail)<br/>Accounting_office1__c → Accounting Office (Lookup)<br/>Region / Country / Broker Network"]
+
+  CommissionLink["Trading Location Commission Link<br/>Trading_Location_Commission_Link__c<br/>Trading_Location__c → Trading Location (required)<br/>Linked_Account__c → BDE or Introducer Account (required)<br/>Start_Date__c / End_Date__c (required)<br/>Account_Type__c = Linked Account Record Type"]
+
+  BDECommission["BDE Commission<br/>BDE_Commission__c<br/>Account__c → BDE Account (Master-Detail)<br/>Commission_Rate__c (required)<br/>Start_Date__c / End_Date__c (required)<br/>Active__c / Brokerage__c"]
+
+  Group -->|"Parent Account"| Intermediary
+  Intermediary -->|"AccountId"| Contact
+  Contact -->|"Trading_Location__c"| TradingLocation
+  Group -->|"Broker_Group__c (Master-Detail)"| TradingLocation
+  AccountingOffice -->|"Accounting_office1__c"| TradingLocation
+  AccountingOffice -.->|"Broker_Group_Account__c"| Group
+  TradingLocation -->|"Trading_Location__c"| CommissionLink
+  CommissionLink -->|"Linked_Account__c"| BDE
+  BDE -->|"Account__c (Master-Detail)"| BDECommission
+
+  classDef account fill:#e3f2fd,stroke:#1565c0,color:#0d47a1;
+  classDef junction fill:#fff8e1,stroke:#ef6c00,color:#4e342e;
+  classDef commission fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20;
+  class Group,Intermediary,AccountingOffice,BDE account;
+  class TradingLocation,CommissionLink junction;
+  class BDECommission commission;
